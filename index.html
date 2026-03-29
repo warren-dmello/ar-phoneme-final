@@ -1,0 +1,2079 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>PhonemeAR — Word Builder</title>
+
+  <!--
+    ╔══════════════════════════════════════════════════════════════╗
+    ║  DEPENDENCY STRATEGY                                         ║
+    ║  • mindar-image-three.prod.js  → bundles Three.js + MindAR  ║
+    ║    Exposes globals: window.MINDAR, window.THREE              ║
+    ║  • No A-Frame. No aframe.min.js. Ever.                       ║
+    ╚══════════════════════════════════════════════════════════════╝
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r126/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
+
+  <!-- Google Fonts: dyslexia-friendly -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700;800&family=Fredoka:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #FFF8F0;
+      --bg-card: #FFFFFF;
+      --text: #2D1B14;
+      --text-muted: #8B7060;
+      --accent-warm: #FF6B35;
+      --accent-cool: #4ECDC4;
+      --accent-pop: #FFE66D;
+      --accent-pink: #FF8AAE;
+      --accent-purple: #A78BFA;
+      --shadow-sm: 0 2px 8px rgba(45, 27, 20, 0.08);
+      --shadow-md: 0 4px 20px rgba(45, 27, 20, 0.12);
+      --shadow-lg: 0 8px 40px rgba(45, 27, 20, 0.16);
+      --radius: 20px;
+      --radius-sm: 12px;
+      --font-display: 'Fredoka', sans-serif;
+      --font-body: 'Lexend', sans-serif;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: var(--font-body);
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen {
+      display: none;
+      flex-direction: column;
+      min-height: 100vh;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    /* ── HOME ── */
+    .home {
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .home::before {
+      content: '';
+      position: absolute;
+      top: -40%;
+      left: -20%;
+      width: 140%;
+      height: 80%;
+      background: radial-gradient(ellipse, rgba(78, 205, 196, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .home::after {
+      content: '';
+      position: absolute;
+      bottom: -30%;
+      right: -20%;
+      width: 120%;
+      height: 60%;
+      background: radial-gradient(ellipse, rgba(255, 107, 53, 0.1) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .home-content {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      max-width: 520px;
+    }
+
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .logo-mark svg {
+      width: 48px;
+      height: 48px;
+    }
+
+    .logo-text {
+      font-family: var(--font-display);
+      font-size: 2.4rem;
+      font-weight: 700;
+      color: var(--accent-warm);
+      letter-spacing: -0.02em;
+    }
+
+    .logo-text span {
+      color: var(--accent-cool);
+    }
+
+    .home h2 {
+      font-family: var(--font-display);
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 40px;
+      line-height: 1.5;
+    }
+
+    .home-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 18px 28px;
+      border: none;
+      border-radius: var(--radius);
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      text-decoration: none;
+    }
+
+    .btn:active {
+      transform: scale(0.97);
+    }
+
+    .btn svg {
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .btn-primary {
+      background: var(--accent-warm);
+      color: #fff;
+      box-shadow: var(--shadow-md), 0 4px 0 0 #D9582B;
+    }
+
+    .btn-primary:hover {
+      box-shadow: var(--shadow-lg), 0 4px 0 0 #D9582B;
+      transform: translateY(-2px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+      border: 2px solid rgba(45, 27, 20, 0.06);
+    }
+
+    .btn-secondary:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .btn-small {
+      padding: 12px 20px;
+      font-size: 0.95rem;
+      border-radius: var(--radius-sm);
+    }
+
+    .btn-accent {
+      background: var(--accent-cool);
+      color: #fff;
+      box-shadow: var(--shadow-md), 0 4px 0 0 #35A89F;
+    }
+
+    /* floating shapes */
+    .float-shape {
+      position: absolute;
+      border-radius: 50%;
+      opacity: 0.5;
+      animation: floatBob 6s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    .float-shape:nth-child(1) {
+      width: 80px;
+      height: 80px;
+      background: var(--accent-pop);
+      top: 8%;
+      left: 5%;
+      animation-delay: 0s;
+    }
+
+    .float-shape:nth-child(2) {
+      width: 60px;
+      height: 60px;
+      background: var(--accent-pink);
+      top: 15%;
+      right: 8%;
+      animation-delay: 1.5s;
+      border-radius: 30%;
+    }
+
+    .float-shape:nth-child(3) {
+      width: 50px;
+      height: 50px;
+      background: var(--accent-cool);
+      bottom: 18%;
+      left: 10%;
+      animation-delay: 3s;
+    }
+
+    .float-shape:nth-child(4) {
+      width: 70px;
+      height: 70px;
+      background: var(--accent-purple);
+      bottom: 12%;
+      right: 6%;
+      animation-delay: 4.5s;
+      border-radius: 35%;
+    }
+
+    @keyframes floatBob {
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(0deg);
+      }
+
+      50% {
+        transform: translateY(-18px) rotate(8deg);
+      }
+    }
+
+    /* ── SETUP ── */
+    .setup {
+      padding: 0;
+    }
+
+    .setup-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      background: var(--bg-card);
+      box-shadow: var(--shadow-sm);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .setup-header h1 {
+      font-family: var(--font-display);
+      font-size: 1.3rem;
+      font-weight: 600;
+    }
+
+    .back-btn {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 50%;
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .setup-body {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .info-banner {
+      background: linear-gradient(135deg, rgba(78, 205, 196, 0.12), rgba(167, 139, 250, 0.12));
+      border: 2px solid rgba(78, 205, 196, 0.2);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      line-height: 1.7;
+      font-size: 0.95rem;
+    }
+
+    .info-banner strong {
+      color: var(--accent-cool);
+    }
+
+    .step-label {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .step-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--accent-warm);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    /* Phoneme tabs & grid */
+    .phoneme-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .phoneme-tab {
+      padding: 8px 16px;
+      border: 2px solid rgba(45, 27, 20, 0.1);
+      border-radius: 100px;
+      background: var(--bg-card);
+      font-family: var(--font-body);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .phoneme-tab.active {
+      background: var(--accent-cool);
+      color: #fff;
+      border-color: var(--accent-cool);
+    }
+
+    .phoneme-library {
+      margin-bottom: 28px;
+    }
+
+    .phoneme-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+      gap: 10px;
+    }
+
+    .phoneme-chip {
+      aspect-ratio: 1;
+      border: 2px solid rgba(45, 27, 20, 0.08);
+      border-radius: var(--radius-sm);
+      background: var(--bg-card);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-display);
+      font-size: 1.4rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      user-select: none;
+    }
+
+    .phoneme-chip:hover {
+      border-color: var(--accent-cool);
+      transform: scale(1.05);
+    }
+
+    .phoneme-chip.selected {
+      background: var(--accent-cool);
+      color: #fff;
+      border-color: var(--accent-cool);
+      box-shadow: 0 2px 12px rgba(78, 205, 196, 0.4);
+    }
+
+    .phoneme-chip .chip-order {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      font-size: 0.6rem;
+      background: var(--accent-warm);
+      color: #fff;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phoneme-chip.selected .chip-order {
+      display: flex;
+    }
+
+    /* Selected preview */
+    .selected-preview {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      box-shadow: var(--shadow-sm);
+      text-align: center;
+      min-height: 80px;
+    }
+
+    .selected-preview-label {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+
+    .selected-phonemes {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      min-height: 48px;
+    }
+
+    .selected-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: linear-gradient(135deg, var(--accent-cool), var(--accent-purple));
+      color: #fff;
+      border-radius: 100px;
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .selected-tag .remove-tag {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.3);
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+    }
+
+    .empty-hint {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    /* Compile */
+    .compile-section {
+      margin-top: 8px;
+    }
+
+    .compile-progress {
+      display: none;
+      margin-top: 16px;
+    }
+
+    .compile-progress.visible {
+      display: block;
+    }
+
+    .progress-bar-track {
+      height: 8px;
+      background: rgba(45, 27, 20, 0.06);
+      border-radius: 100px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-cool), var(--accent-purple));
+      border-radius: 100px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    .progress-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+
+    /* ── CARDS SCREEN ── */
+    .cards-screen .setup-body {
+      max-width: 750px;
+      margin: 0 auto;
+    }
+
+    .cards-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .card-item {
+      background: var(--bg-card);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .card-item-preview {
+      width: 120px;
+      height: 120px;
+      flex-shrink: 0;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 2px solid rgba(45, 27, 20, 0.08);
+    }
+
+    .card-item-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .card-item-info {
+      flex: 1;
+    }
+
+    .card-item-info h3 {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .card-item-info p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+
+    .card-item-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .btn-icon {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 14px;
+      border: 2px solid rgba(45, 27, 20, 0.08);
+      border-radius: 100px;
+      background: var(--bg);
+      font-family: var(--font-body);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      color: var(--text);
+    }
+
+    .btn-icon:hover {
+      border-color: var(--accent-cool);
+      background: rgba(78, 205, 196, 0.08);
+    }
+
+    .btn-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    /* ── DISPLAY MODE OVERLAY ── */
+    .display-overlay {
+      position: fixed;
+      inset: 0;
+      background: #fff;
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .display-overlay.visible {
+      display: flex;
+    }
+
+    .display-overlay-top {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      z-index: 10;
+    }
+
+    .display-nav-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      border: 2px solid rgba(45, 27, 20, 0.1);
+      background: var(--bg);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .display-nav-btn:hover {
+      border-color: var(--accent-cool);
+    }
+
+    .display-nav-btn:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    .display-counter {
+      font-family: var(--font-display);
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .display-card-img {
+      max-width: min(90vw, 500px);
+      max-height: 70vh;
+      object-fit: contain;
+      border: 3px solid var(--text);
+      border-radius: var(--radius-sm);
+    }
+
+    .display-phoneme-label {
+      margin-top: 20px;
+      font-family: var(--font-display);
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent-cool);
+    }
+
+    .display-hint {
+      margin-top: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 0 20px;
+    }
+
+    /* ═══════════════════════════════════════════════
+       AR SCANNER — Critical layout for camera feed
+       ═══════════════════════════════════════════════
+       The #ar-container is the MindAR mount point.
+       MindARThree injects:
+         1. A <video> element (the camera feed)
+         2. A <canvas> element (Three.js renderer, transparent bg)
+       Both are absolutely positioned to fill the container.
+       DO NOT add overflow:hidden or clip to this container.
+    */
+    .scanner {
+      position: relative;
+      background: #000;
+      /* Black bg shows while camera is loading */
+    }
+
+    #ar-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      /* Let MindAR inject its video + canvas freely */
+      overflow: visible;
+    }
+
+    /* Ensure MindAR's injected video fills the container */
+    #ar-container video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* Ensure MindAR's injected canvas sits on top of the video */
+    #ar-container canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    /* AR overlay sits above both video and canvas */
+    .ar-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 50;
+    }
+
+    .ar-top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      padding-top: max(12px, env(safe-area-inset-top));
+      pointer-events: auto;
+    }
+
+    .ar-back-btn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: none;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .ar-word-display {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      padding: 0 16px 24px;
+      padding-bottom: max(24px, env(safe-area-inset-bottom));
+      pointer-events: auto;
+      z-index: 50;
+    }
+
+    .word-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      box-shadow: var(--shadow-lg);
+      text-align: center;
+    }
+
+    .word-card-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-bottom: 6px;
+    }
+
+    .built-word {
+      font-family: var(--font-display);
+      font-size: 2.6rem;
+      font-weight: 700;
+      color: var(--text);
+      min-height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      letter-spacing: 0.04em;
+    }
+
+    .built-word .phoneme-part {
+      transition: all 0.3s ease;
+    }
+
+    .built-word .phoneme-part.found {
+      color: var(--accent-cool);
+    }
+
+    .scan-hint {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .speak-btn {
+      margin-top: 12px;
+      padding: 10px 24px;
+      background: var(--accent-warm);
+      color: #fff;
+      border: none;
+      border-radius: 100px;
+      font-family: var(--font-display);
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: none;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .speak-btn.visible {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tracker-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+
+    .tracker-dot {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .tracker-dot .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ddd;
+      transition: background 0.3s;
+    }
+
+    .tracker-dot .dot.active {
+      background: var(--accent-cool);
+      box-shadow: 0 0 8px rgba(78, 205, 196, 0.6);
+    }
+
+    .ar-loading {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .ar-loading.visible {
+      display: flex;
+    }
+
+    .ar-loading-text {
+      color: #fff;
+      font-family: var(--font-display);
+      font-size: 1.2rem;
+      text-align: center;
+      padding: 0 24px;
+    }
+
+    .ar-error-text {
+      color: #ff8888;
+      font-size: 0.85rem;
+      text-align: center;
+      padding: 0 32px;
+      display: none;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.2);
+      border-top-color: var(--accent-cool);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 400px) {
+      .logo-text {
+        font-size: 1.9rem;
+      }
+
+      .home h2 {
+        font-size: 1.2rem;
+      }
+
+      .phoneme-grid {
+        grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+      }
+
+      .card-item {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .card-item-actions {
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+
+    <!-- ══════ HOME ══════ -->
+    <div id="homeScreen" class="screen home active">
+      <div class="float-shape"></div>
+      <div class="float-shape"></div>
+      <div class="float-shape"></div>
+      <div class="float-shape"></div>
+      <div class="home-content">
+        <div class="logo-mark">
+          <svg viewBox="0 0 48 48" fill="none">
+            <rect x="4" y="8" width="16" height="32" rx="4" fill="#4ECDC4" />
+            <rect x="28" y="8" width="16" height="32" rx="4" fill="#FF6B35" />
+            <circle cx="12" cy="24" r="4" fill="#fff" />
+            <circle cx="36" cy="24" r="4" fill="#fff" />
+            <path d="M20 24 H28" stroke="#FFE66D" stroke-width="3" stroke-linecap="round" stroke-dasharray="4 4" />
+          </svg>
+          <div class="logo-text">Phoneme<span>AR</span></div>
+        </div>
+        <h2>Scan phoneme cards with your camera to build and hear words come alive!</h2>
+        <div class="home-actions">
+          <button class="btn btn-primary" onclick="showScreen('setupScreen')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <line x1="12" y1="8" x2="12" y2="16" />
+              <line x1="8" y1="12" x2="16" y2="12" />
+            </svg>
+            Create Phoneme Cards
+          </button>
+          <button class="btn btn-secondary" onclick="showScreen('cardsScreen')" id="viewCardsBtn" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            View / Download Cards
+          </button>
+          <button class="btn btn-secondary" onclick="launchAR()" id="scanBtn" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            Scan &amp; Build Words
+          </button>
+          <button class="btn btn-primary" onclick="downloadLogs()" id="downloadLogsBtn" style="display:flex;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download Results
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ SETUP / COMPILE ══════ -->
+    <div id="setupScreen" class="screen setup">
+      <div class="setup-header">
+        <button class="back-btn" onclick="showScreen('homeScreen')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1>Create Phoneme Cards</h1>
+      </div>
+      <div class="setup-body">
+        <div class="info-banner">
+          <strong>How it works:</strong> Choose 2 or more phonemes below. We'll generate unique marker images and
+          compile them for AR tracking. Then download the cards, print them (or show on a second screen), and scan with
+          your phone!
+        </div>
+
+        <div class="step-label"><span class="step-num">1</span> Pick your phonemes</div>
+        <div class="phoneme-tabs">
+          <button class="phoneme-tab active" data-cat="core">Core Phonemes</button>
+        </div>
+        <div class="phoneme-library">
+          <div class="phoneme-grid" id="phonemeGrid"></div>
+        </div>
+
+        <div class="selected-preview">
+          <div class="selected-preview-label">Selected Phonemes (in order)</div>
+          <div class="selected-phonemes" id="selectedPhonemes">
+            <span class="empty-hint">Tap phonemes above to select them</span>
+          </div>
+        </div>
+
+        <div class="step-label"><span class="step-num">2</span> Generate AR markers</div>
+        <div class="compile-section">
+          <button class="btn btn-primary" id="compileBtn" onclick="compileTargets()" disabled>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+            Compile Markers
+          </button>
+          <div class="compile-progress" id="compileProgress">
+            <div class="progress-bar-track">
+              <div class="progress-bar-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Preparing images…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ CARDS SCREEN ══════ -->
+    <div id="cardsScreen" class="screen setup cards-screen">
+      <div class="setup-header">
+        <button class="back-btn" onclick="showScreen('homeScreen')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <h1>Your Phoneme Cards</h1>
+      </div>
+      <div class="setup-body">
+        <div class="info-banner">
+          <strong>Download</strong> each card individually as a PNG to print, or use <strong>Display on Screen</strong>
+          to show cards full-screen on your laptop while you scan with your phone. Each card has a unique pattern so the
+          camera can tell them apart.
+        </div>
+
+        <div class="cards-actions">
+          <button class="btn btn-primary" onclick="downloadAllCards()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            Download All Cards
+          </button>
+          <button class="btn btn-accent" onclick="openDisplayMode(0)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+            </svg>
+            Display on Screen
+          </button>
+          <button class="btn btn-secondary" onclick="launchAR()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+            Start Scanning
+          </button>
+          <button class="btn btn-accent" onclick="openGridDisplayMode()">
+            Show All Cards (Grid)
+          </button>
+        </div>
+
+        <div id="cardsList"></div>
+      </div>
+    </div>
+
+    <!-- ══════ DISPLAY MODE OVERLAY ══════ -->
+    <div class="display-overlay" id="displayOverlay">
+      <div id="gridDisplayContainer" style="display:none; width: 100%; height: 100%; overflow-y: auto; background: #222; color: #fff;"></div>
+      <div class="display-overlay-top">
+        <button class="display-nav-btn" id="displayPrev" onclick="displayNav(-1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
+        <span class="display-counter" id="displayCounter">1 / 3</span>
+        <button class="display-nav-btn" id="displayNext" onclick="displayNav(1)">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+            stroke-linecap="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
+        </button>
+      </div>
+      <img class="display-card-img" id="displayCardImg" src="" alt="Phoneme card">
+      <div class="display-phoneme-label" id="displayPhonemeLabel"></div>
+      <div class="display-hint">Show this screen to your phone's camera to scan it. Use ← → arrows to switch between
+        cards.</div>
+      <button class="btn btn-small btn-secondary" onclick="closeDisplayMode()" style="position:absolute;bottom:24px;">
+        Close Display Mode
+      </button>
+    </div>
+
+    <!-- ══════ AR SCANNER ══════ -->
+    <div id="scannerScreen" class="screen scanner">
+      <!--
+        #ar-container is the sole mount point for MindARThree.
+        MindARThree will inject:
+          • <video>  — live camera feed (sits at z-index:0 effectively)
+          • <canvas> — Three.js renderer (transparent background, sits above video)
+        Do NOT put children here; they will be wiped on launchAR().
+      -->
+      <div id="ar-container"></div>
+
+      <!-- DOM overlay: pointer-events: none so it doesn't block Three.js canvas -->
+      <div class="ar-overlay">
+        <div class="ar-top-bar">
+          <button class="ar-back-btn" onclick="stopAR()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="ar-word-display">
+        <div class="word-card">
+          <div class="word-card-label">Built Word</div>
+          <div class="built-word" id="builtWord">
+            <span class="scan-hint">Point camera at your phoneme cards</span>
+          </div>
+          <div class="tracker-status" id="trackerStatus"></div>
+          <button class="speak-btn" id="speakBtn" onclick="speakWord()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+            Hear It
+          </button>
+        </div>
+      </div>
+
+      <!-- Full-screen loading overlay shown during AR init -->
+      <div class="ar-loading" id="arLoading">
+        <div class="spinner"></div>
+        <div class="ar-loading-text" id="arLoadingText">Starting camera &amp; loading AR engine…</div>
+        <div class="ar-error-text" id="arErrorText"></div>
+      </div>
+    </div>
+
+  </div><!-- /.app -->
+
+  <script>
+    // ═══════════════════════════════════════════════════════════════
+    // ██████  PHONEME AR — Pure Three.js + MindAR (no A-Frame)
+    //
+    // Architecture:
+    //   • initAR()         — build MindARThree instance + Three.js scene
+    //   • startAR()        — call mindarThree.start(), begin render loop
+    //   • stopAR()         — halt render loop, dispose renderer, clean DOM
+    //   • attachAnchor()   — per-target anchor + 3D overlay mesh + events
+    //   • updateWordDisplay() — pure DOM; reads from trackedTargets Map
+    //   • speakWord()      — Web Speech API TTS
+    // ═══════════════════════════════════════════════════════════════
+
+    // ─────────────────────────────────────────────
+    // PHONEME DATA
+    // ─────────────────────────────────────────────
+    const PHONEME_SETS = {
+      core: ['k','a','t','m','s','ee']
+    };
+
+    const VALID_WORDS = [
+      { phonemes: ["k","a","t"], word: "cat" },
+      { phonemes: ["m","a","t"], word: "mat" },
+      { phonemes: ["s","a","t"], word: "sat" },
+      { phonemes: ["s","ee"], word: "see" }
+    ];
+    let researchMode = true;
+    let sessionLogs = [];
+    let attemptStartTime = null;
+    let currentSequence = [];
+    let trackingTimeout = null;
+
+    function matchWord(sequence) {
+      return VALID_WORDS.find(w => JSON.stringify(w.phonemes) === JSON.stringify(sequence));
+    }
+
+    function logResult(sequence, result, timeTaken) {
+      sessionLogs.push({
+        timestamp: Date.now(),
+        sequence,
+        result,
+        timeTaken
+      });
+      console.log(`[Research Log] ${result}:`, sequence, `${timeTaken}ms`);
+    }
+
+    function downloadLogs() {
+      const blob = new Blob([JSON.stringify(sessionLogs, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "phoneme-results.json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    const COLORS = [
+      '#4ECDC4', '#FF6B35', '#A78BFA', '#FF8AAE',
+      '#FFE66D', '#34D399', '#F472B6', '#818CF8',
+      '#FB923C', '#38BDF8'
+    ];
+
+    // ─────────────────────────────────────────────
+    // APP STATE
+    // ─────────────────────────────────────────────
+    let selectedPhonemes = [];
+    let compiledMindFile = null;
+    let generatedCardDataURLs = [];
+    let displayIndex = 0;
+
+    // ─────────────────────────────────────────────
+    // AR STATE  (all AR-related references in one block)
+    // ─────────────────────────────────────────────
+    /** @type {import('mind-ar')|null} MindARThree instance */
+    let mindarThree = null;
+    /** Resize handler reference so we can remove it on stopAR */
+    let _arResizeHandler = null;
+    /** Blob URL to revoke on cleanup */
+    let _arMindUrl = null;
+    /** Currently visible targets: index → phoneme string */
+    const trackedTargets = new Map();
+
+    // ─────────────────────────────────────────────
+    // SCREEN NAVIGATION
+    // ─────────────────────────────────────────────
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+      if (id === 'cardsScreen') renderCardsList();
+      if (id === 'homeScreen') {
+        document.getElementById('viewCardsBtn').style.display = compiledMindFile ? 'flex' : 'none';
+        document.getElementById('scanBtn').style.display = compiledMindFile ? 'flex' : 'none';
+      }
+    }
+
+    // ─────────────────────────────────────────────
+    // PHONEME GRID
+    // ─────────────────────────────────────────────
+    function renderPhonemeGrid(category) {
+      const grid = document.getElementById('phonemeGrid');
+      const phonemes = PHONEME_SETS[category] || [];
+      grid.innerHTML = phonemes.map(p => {
+        const idx = selectedPhonemes.indexOf(p);
+        const sel = idx > -1 ? 'selected' : '';
+        return `<div class="phoneme-chip ${sel}" onclick="togglePhoneme('${p}')">
+          ${p}
+          <span class="chip-order">${idx > -1 ? idx + 1 : ''}</span>
+        </div>`;
+      }).join('');
+    }
+
+    document.querySelectorAll('.phoneme-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.phoneme-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        renderPhonemeGrid(tab.dataset.cat);
+      });
+    });
+
+    function togglePhoneme(p) {
+      const idx = selectedPhonemes.indexOf(p);
+      if (idx > -1) selectedPhonemes.splice(idx, 1);
+      else if (selectedPhonemes.length < 10) selectedPhonemes.push(p);
+      updateSelectedUI();
+      const activeTab = document.querySelector('.phoneme-tab.active');
+      if (activeTab) renderPhonemeGrid(activeTab.dataset.cat);
+    }
+
+    function removeSelected(p) {
+      selectedPhonemes = selectedPhonemes.filter(x => x !== p);
+      updateSelectedUI();
+      const activeTab = document.querySelector('.phoneme-tab.active');
+      if (activeTab) renderPhonemeGrid(activeTab.dataset.cat);
+    }
+
+    function updateSelectedUI() {
+      const container = document.getElementById('selectedPhonemes');
+      const btn = document.getElementById('compileBtn');
+      if (selectedPhonemes.length === 0) {
+        container.innerHTML = '<span class="empty-hint">Tap phonemes above to select them</span>';
+        btn.disabled = true;
+      } else {
+        container.innerHTML = selectedPhonemes.map((p, i) =>
+          `<span class="selected-tag">
+            <strong>${i + 1}.</strong> ${p}
+            <button class="remove-tag" onclick="removeSelected('${p}')">✕</button>
+          </span>`
+        ).join('');
+        btn.disabled = selectedPhonemes.length < 2;
+      }
+    }
+
+    renderPhonemeGrid('core');
+
+    // ─────────────────────────────────────────────
+    // GENERATE CARD IMAGE (Canvas → PNG)
+    // ─────────────────────────────────────────────
+    function generateCardImage(phoneme, index) {
+      return new Promise(resolve => {
+        const size = 512;
+        const canvas = document.createElement('canvas');
+        canvas.width = size; canvas.height = size;
+        const ctx = canvas.getContext('2d');
+
+        const c1 = COLORS[index % COLORS.length];
+        const c2 = COLORS[(index + 3) % COLORS.length];
+
+        // White background
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, size, size);
+
+        // Border
+        ctx.strokeStyle = '#1a1a1a'; ctx.lineWidth = 6;
+        ctx.strokeRect(8, 8, size - 16, size - 16);
+
+        // Corner marks (used by MindAR for reliable feature detection)
+        ctx.strokeStyle = c1; ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.moveTo(20, 60); ctx.lineTo(20, 20); ctx.lineTo(60, 20); ctx.stroke();
+        ctx.strokeStyle = c2;
+        ctx.beginPath(); ctx.moveTo(size - 20, size - 60); ctx.lineTo(size - 20, size - 20); ctx.lineTo(size - 60, size - 20); ctx.stroke();
+        ctx.strokeStyle = c2; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(size - 60, 20); ctx.lineTo(size - 20, 20); ctx.lineTo(size - 20, 60); ctx.stroke();
+        ctx.strokeStyle = c1;
+        ctx.beginPath(); ctx.moveTo(20, size - 60); ctx.lineTo(20, size - 20); ctx.lineTo(60, size - 20); ctx.stroke();
+
+        // Unique per-card geometric pattern (deterministic noise for feature richness)
+        ctx.globalAlpha = 0.1;
+        const seed = index * 37 + 7;
+        for (let i = 0; i < 25; i++) {
+          const x = ((seed * (i + 1) * 13) % (size - 80)) + 40;
+          const y = ((seed * (i + 1) * 17) % (size - 80)) + 40;
+          const r = ((seed * (i + 1) * 7) % 20) + 4;
+          ctx.fillStyle = i % 2 === 0 ? c1 : c2;
+          if (i % 3 === 0) { ctx.fillRect(x - r, y - r, r * 2, r * 2); }
+          else if (i % 3 === 1) { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
+          else { ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y + r); ctx.lineTo(x - r, y + r); ctx.closePath(); ctx.fill(); }
+        }
+        ctx.globalAlpha = 1;
+
+        // Edge stripe patterns
+        const po = (index * 23) % 6;
+        for (let i = 0; i < 8; i++) {
+          const px = 30 + i * 58;
+          ctx.fillStyle = (i + po) % 2 === 0 ? c1 : c2;
+          ctx.globalAlpha = 0.35;
+          ctx.fillRect(px, size - 40, 28, 14);
+          ctx.fillRect(px, 22, 28, 14);
+          ctx.globalAlpha = 1;
+        }
+        for (let i = 0; i < 6; i++) {
+          const py = 50 + i * 75;
+          ctx.fillStyle = (i + po) % 2 === 0 ? c2 : c1;
+          ctx.globalAlpha = 0.25;
+          ctx.fillRect(18, py, 14, 28);
+          ctx.fillRect(size - 32, py, 14, 28);
+          ctx.globalAlpha = 1;
+        }
+
+        // Card index label
+        ctx.fillStyle = '#aaa'; ctx.font = '600 22px sans-serif';
+        ctx.textAlign = 'right'; ctx.fillText('#' + (index + 1), size - 30, 50);
+
+        // Main phoneme — large, bold, centred
+        ctx.fillStyle = '#1a1a1a';
+        ctx.font = '800 ' + (phoneme.length > 2 ? 130 : 170) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(phoneme, size / 2, size / 2);
+
+        // Branding footer
+        ctx.fillStyle = '#888'; ctx.font = '500 18px sans-serif';
+        ctx.textBaseline = 'bottom'; ctx.fillText('PhonemeAR', size / 2, size - 48);
+
+        const dataUrl = canvas.toDataURL('image/png');
+        const img = new Image();
+        img.onload = () => resolve({ img, dataUrl });
+        img.src = dataUrl;
+      });
+    }
+
+    // ─────────────────────────────────────────────
+    // COMPILE TARGETS
+    // ─────────────────────────────────────────────
+    async function compileTargets() {
+      if (selectedPhonemes.length < 2) return;
+
+      const progressEl = document.getElementById('compileProgress');
+      const fillEl = document.getElementById('progressFill');
+      const textEl = document.getElementById('progressText');
+      const btn = document.getElementById('compileBtn');
+
+      progressEl.classList.add('visible');
+      btn.disabled = true;
+      fillEl.style.width = '5%';
+      textEl.textContent = 'Generating card images…';
+
+      const images = [];
+      generatedCardDataURLs = [];
+
+      for (let i = 0; i < selectedPhonemes.length; i++) {
+        const { img, dataUrl } = await generateCardImage(selectedPhonemes[i], i);
+        images.push(img);
+        generatedCardDataURLs.push(dataUrl);
+        fillEl.style.width = ((i + 1) / selectedPhonemes.length * 40) + '%';
+        textEl.textContent = 'Generated card ' + (i + 1) + ' of ' + selectedPhonemes.length + '…';
+      }
+
+      textEl.textContent = 'Compiling AR markers (this may take a moment)…';
+      fillEl.style.width = '50%';
+
+      try {
+        // MINDAR.IMAGE.Compiler is provided by mindar-image-three.prod.js
+        const compiler = new MINDAR.IMAGE.Compiler();
+        await compiler.compileImageTargets(images, (progress) => {
+          fillEl.style.width = (50 + progress * 50) + '%';
+          textEl.textContent = 'Compiling… ' + Math.round(progress * 100) + '%';
+        });
+
+        compiledMindFile = await compiler.exportData();
+
+        fillEl.style.width = '100%';
+        textEl.textContent = 'Done! Your markers are ready.';
+        btn.disabled = false;
+
+        document.getElementById('viewCardsBtn').style.display = 'flex';
+        document.getElementById('scanBtn').style.display = 'flex';
+
+        setTimeout(() => showScreen('cardsScreen'), 800);
+      } catch (err) {
+        console.error('[Compile] Error:', err);
+        textEl.textContent = 'Error compiling. Please try again or use fewer phonemes.';
+        btn.disabled = false;
+      }
+    }
+
+    // ─────────────────────────────────────────────
+    // CARDS LIST
+    // ─────────────────────────────────────────────
+    function renderCardsList() {
+      const list = document.getElementById('cardsList');
+      list.innerHTML = '';
+      selectedPhonemes.forEach((p, i) => {
+        const dataUrl = generatedCardDataURLs[i];
+        const c1 = COLORS[i % COLORS.length];
+        const item = document.createElement('div');
+        item.className = 'card-item';
+        item.innerHTML =
+          '<div class="card-item-preview"><img src="' + dataUrl + '" alt="Card for ' + p + '"></div>' +
+          '<div class="card-item-info">' +
+          '<h3 style="color:' + c1 + '">' + p + '</h3>' +
+          '<p>Card #' + (i + 1) + ' of ' + selectedPhonemes.length + '</p>' +
+          '<div class="card-item-actions">' +
+          '<button class="btn-icon" onclick="downloadCard(' + i + ')">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
+          'Download PNG' +
+          '</button>' +
+          '<button class="btn-icon" onclick="openDisplayMode(' + i + ')">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' +
+          'Show on Screen' +
+          '</button>' +
+          '</div>' +
+          '</div>';
+        list.appendChild(item);
+      });
+    }
+
+    function downloadCard(index) {
+      const a = document.createElement('a');
+      a.href = generatedCardDataURLs[index];
+      a.download = 'phoneme-card-' + (index + 1) + '-' + selectedPhonemes[index] + '.png';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    }
+
+    function downloadAllCards() {
+      selectedPhonemes.forEach((_, i) => setTimeout(() => downloadCard(i), i * 400));
+    }
+
+    // ─────────────────────────────────────────────
+    // DISPLAY MODE
+    // ─────────────────────────────────────────────
+    let displayModeType = "single";
+
+    function openGridDisplayMode() {
+      displayModeType = "grid";
+      renderGridDisplay();
+      document.getElementById('displayOverlay').classList.add('visible');
+    }
+
+    function renderGridDisplay() {
+      const container = document.getElementById('gridDisplayContainer');
+      container.style.display = 'grid';
+      container.innerHTML = '';
+
+      container.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+      container.style.gap = '20px';
+      container.style.padding = '80px 20px 100px';
+      container.style.justifyItems = 'center';
+      container.style.alignItems = 'center';
+
+      selectedPhonemes.forEach((p, i) => {
+        const wrapper = document.createElement('div');
+        wrapper.style.textAlign = 'center';
+
+        const img = document.createElement('img');
+        img.src = generatedCardDataURLs[i];
+        img.style.width = '180px';
+        img.style.height = '180px';
+        img.style.objectFit = 'contain';
+        img.style.border = '2px solid #555';
+        img.style.borderRadius = '12px';
+
+        const label = document.createElement('div');
+        label.textContent = p;
+        label.style.marginTop = '8px';
+        label.style.fontFamily = 'Fredoka, sans-serif';
+        label.style.fontSize = '1.2rem';
+        label.style.fontWeight = '600';
+
+        wrapper.appendChild(img);
+        wrapper.appendChild(label);
+        container.appendChild(wrapper);
+      });
+
+      // Hide single display elements
+      document.getElementById('displayCardImg').style.display = 'none';
+      document.getElementById('displayPhonemeLabel').style.display = 'none';
+      
+      // Attempt fullscreen
+      if (document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(err => console.log(err));
+      }
+    }
+
+    function openDisplayMode(index) {
+      displayIndex = index;
+      updateDisplayMode();
+      document.getElementById('displayOverlay').classList.add('visible');
+    }
+
+    function closeDisplayMode() {
+      document.getElementById('displayOverlay').classList.remove('visible');
+
+      // Reset grid
+      const container = document.getElementById('gridDisplayContainer');
+      if (container) {
+          container.style.display = 'none';
+          container.innerHTML = '';
+      }
+
+      // Restore single mode UI
+      document.getElementById('displayCardImg').style.display = '';
+      document.getElementById('displayPhonemeLabel').style.display = '';
+
+      displayModeType = "single";
+      
+      if (document.fullscreenElement) {
+          document.exitFullscreen().catch(err => console.log(err));
+      }
+    }
+
+    function displayNav(dir) {
+      displayIndex = Math.max(0, Math.min(selectedPhonemes.length - 1, displayIndex + dir));
+      updateDisplayMode();
+    }
+
+    function updateDisplayMode() {
+      document.getElementById('displayCardImg').src = generatedCardDataURLs[displayIndex];
+      document.getElementById('displayPhonemeLabel').textContent = selectedPhonemes[displayIndex];
+      document.getElementById('displayCounter').textContent = (displayIndex + 1) + ' / ' + selectedPhonemes.length;
+      document.getElementById('displayPrev').disabled = displayIndex === 0;
+      document.getElementById('displayNext').disabled = displayIndex === selectedPhonemes.length - 1;
+    }
+
+    document.addEventListener('keydown', e => {
+      if (!document.getElementById('displayOverlay').classList.contains('visible')) return;
+      if (e.key === 'ArrowLeft') displayNav(-1);
+      else if (e.key === 'ArrowRight') displayNav(1);
+      else if (e.key === 'Escape') closeDisplayMode();
+    });
+
+    // ═══════════════════════════════════════════════════════════════
+    // ████████  AR ENGINE — Three.js + MindARThree
+    //
+    //  Key insight: MindARThree is NOT auto-initialized.
+    //  We explicitly:
+    //    1. Create the MindARThree instance with our container + config
+    //    2. Extract the Three.js { renderer, scene, camera } triplet
+    //    3. Configure renderer for transparent background (camera shows through)
+    //    4. Add an anchor per phoneme target
+    //    5. Attach onTargetFound / onTargetLost callbacks
+    //    6. Call mindarThree.start() — this starts the camera stream
+    //    7. Use renderer.setAnimationLoop() for the render loop
+    //    8. On stop: setAnimationLoop(null) → mindarThree.stop() → dispose
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Creates a Three.js mesh showing the phoneme label.
+     * Rendered onto a canvas → CanvasTexture → PlaneGeometry.
+     * This mesh is added to the anchor's group so it tracks the marker.
+     *
+     * @param {string} phoneme
+     * @param {number} index
+     * @returns {THREE.Mesh}
+     */
+    function createPhonemeOverlayMesh(phoneme, index) {
+      // Render phoneme label to an offscreen canvas
+      const W = 512, H = 256;
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const ctx = c.getContext('2d');
+      const col = COLORS[index % COLORS.length];
+
+      // Rounded white card background
+      ctx.clearRect(0, 0, W, H);
+      ctx.beginPath();
+      ctx.moveTo(40, 0); ctx.lineTo(W - 40, 0);
+      ctx.quadraticCurveTo(W, 0, W, 40);
+      ctx.lineTo(W, H - 40);
+      ctx.quadraticCurveTo(W, H, W - 40, H);
+      ctx.lineTo(40, H);
+      ctx.quadraticCurveTo(0, H, 0, H - 40);
+      ctx.lineTo(0, 40);
+      ctx.quadraticCurveTo(0, 0, 40, 0);
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(255,255,255,0.92)';
+      ctx.fill();
+
+      // Coloured top bar
+      ctx.fillStyle = col;
+      ctx.fillRect(0, 0, W, 18);
+
+      // Phoneme text — centred
+      ctx.fillStyle = col;
+      ctx.font = 'bold ' + (phoneme.length > 2 ? '110px' : '150px') + ' Fredoka, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(phoneme.toUpperCase(), W / 2, H / 2 + 8);
+
+      // Three.js texture + geometry
+      const texture = new THREE.CanvasTexture(c);
+      const geo = new THREE.PlaneGeometry(1, 0.5);
+      const mat = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false   // prevents z-fighting artifacts on the marker surface
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(0, 0, 0.01); // tiny z-offset above the marker plane
+
+      return mesh;
+    }
+
+    /**
+     * initAR — builds the MindARThree instance, Three.js scene, camera,
+     * renderer, and one anchor+mesh per phoneme.
+     *
+     * Does NOT start the camera. Call startAR() after this.
+     *
+     * @param {string} mindUrl  — blob:// URL of the compiled .mind file
+     * @param {HTMLElement} container
+     */
+    function initAR(mindUrl, container) {
+      console.log('[AR] initAR() — constructing MindARThree');
+
+      const maxTrack = Math.min(selectedPhonemes.length, 4);
+
+      // ── 1. Create MindARThree ──────────────────────────────────
+      // MindARThree is the central controller. It:
+      //   • Creates an internal Three.js WebGLRenderer (with alpha:true)
+      //   • Creates an orthographic camera for the background video quad
+      //   • Creates a perspective camera for 3D content
+      //   • Injects a <video> and the renderer <canvas> into `container`
+      mindarThree = new MINDAR.IMAGE.MindARThree({
+        container,
+        imageTargetSrc: mindUrl,
+        maxTrack,
+        filterMinCF: 0.001,   // Kalman filter min cutoff — lower = smoother
+        filterBeta: 100,     // Kalman speed coefficient
+        missTolerance: 10,      // frames before declaring target lost
+        warmupTolerance: 3,       // frames before declaring target found
+        uiLoading: 'no',    // we handle our own loading UI
+        uiScanning: 'no',    // suppress built-in scanning reticle
+        uiError: 'no'     // suppress built-in error overlays
+      });
+
+      // ── 2. Extract the Three.js triplet ───────────────────────
+      const { renderer, scene, camera } = mindarThree;
+
+      // ── 3. Renderer configuration ─────────────────────────────
+      // CRITICAL: alpha:true is already set by MindARThree.
+      // We set clearColor with alpha=0 so the video bleeds through.
+      renderer.setClearColor(0x000000, 0);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap at 2× for perf
+      renderer.shadowMap.enabled = false; // shadows off for mobile perf
+
+      // ── 4. Lighting ────────────────────────────────────────────
+      // HemisphereLight gives natural top/bottom fill with no shadows
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+      scene.add(hemiLight);
+
+      // ── 5. Anchors — one per phoneme target ───────────────────
+      selectedPhonemes.forEach((phoneme, idx) => {
+        // addAnchor(i) binds to target index i in the .mind file.
+        // anchor.group is a THREE.Group that is auto-positioned+oriented
+        // by the MindAR tracking system every frame.
+        const anchor = mindarThree.addAnchor(idx);
+        const mesh = createPhonemeOverlayMesh(phoneme, idx);
+        anchor.group.add(mesh);
+
+        // ── Target found: marker became visible ─────────────────
+        anchor.onTargetFound = () => {
+          console.log('[AR] ✅ Target found — idx:', idx, 'phoneme:', phoneme);
+          trackedTargets.set(idx, phoneme);
+          updateWordDisplay();
+        };
+
+        // ── Target lost: marker left the frame ──────────────────
+        anchor.onTargetLost = () => {
+          console.log('[AR] ❌ Target lost  — idx:', idx, 'phoneme:', phoneme);
+          trackedTargets.delete(idx);
+          updateWordDisplay();
+        };
+      });
+
+      // ── 6. Resize handler ─────────────────────────────────────
+      // MindARThree adjusts its internal camera + video scale on resize,
+      // but we also need to update renderer pixel size.
+      _arResizeHandler = () => {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+        renderer.setSize(w, h);
+        console.log('[AR] Resize →', w, 'x', h);
+      };
+      window.addEventListener('resize', _arResizeHandler);
+
+      console.log('[AR] initAR() complete — anchors:', selectedPhonemes.length, '| maxTrack:', maxTrack);
+    }
+
+    /**
+     * startAR — requests camera access and begins tracking + render loop.
+     * Must be called after initAR().
+     */
+    async function startAR() {
+      if (!mindarThree) throw new Error('startAR() called before initAR()');
+
+      const { renderer, scene, camera } = mindarThree;
+
+      console.log('[AR] startAR() — requesting camera…');
+
+      // mindarThree.start() internally calls getUserMedia and returns
+      // a Promise. It resolves once the camera stream is live.
+      await mindarThree.start();
+
+      console.log('[AR] Camera started ✅');
+
+      // ── Render loop ────────────────────────────────────────────
+      // setAnimationLoop is the recommended Three.js API for WebXR-
+      // compatible render loops. It replaces requestAnimationFrame.
+      // MindAR's tracking update runs inside the loop automatically.
+      renderer.setAnimationLoop(() => {
+        renderer.render(scene, camera);
+      });
+
+      console.log('[AR] Render loop running');
+    }
+
+    /**
+     * stopAR — gracefully tears down the entire AR stack.
+     * Safe to call multiple times.
+     */
+    function stopAR() {
+      console.log('[AR] stopAR() — shutting down');
+
+      if (!mindarThree) {
+        // Nothing to clean up; just navigate home
+        trackedTargets.clear();
+        showScreen('homeScreen');
+        return;
+      }
+
+      try {
+        const { renderer } = mindarThree;
+
+        // 1. Halt the render loop first — prevents rendering after dispose
+        renderer.setAnimationLoop(null);
+        console.log('[AR] Render loop stopped');
+
+        // 2. Remove window resize listener
+        if (_arResizeHandler) {
+          window.removeEventListener('resize', _arResizeHandler);
+          _arResizeHandler = null;
+        }
+
+        // 3. Stop MindAR tracking + camera stream
+        mindarThree.stop();
+        console.log('[AR] MindAR stopped');
+
+        // 4. Dispose Three.js GPU resources
+        renderer.dispose();
+        console.log('[AR] Renderer disposed');
+
+      } catch (err) {
+        console.warn('[AR] Cleanup warning (non-fatal):', err);
+      }
+
+      // 5. Revoke the blob URL we created for the .mind file
+      if (_arMindUrl) {
+        URL.revokeObjectURL(_arMindUrl);
+        _arMindUrl = null;
+      }
+
+      // 6. Clear the container DOM (removes MindAR's video + canvas)
+      const container = document.getElementById('ar-container');
+      container.innerHTML = '';
+
+      // 7. Reset references
+      mindarThree = null;
+      trackedTargets.clear();
+
+      console.log('[AR] Cleanup complete');
+      showScreen('homeScreen');
+    }
+
+    /**
+     * launchAR — the public entry point called from UI buttons.
+     * Orchestrates showScreen → initAR → startAR with full error handling.
+     */
+    async function launchAR() {
+      if (!compiledMindFile) {
+        alert('Please compile your phoneme cards first!');
+        return;
+      }
+
+      // Navigate to scanner screen and show loading overlay
+      showScreen('scannerScreen');
+      const loadingEl = document.getElementById('arLoading');
+      const loadingText = document.getElementById('arLoadingText');
+      const errorText = document.getElementById('arErrorText');
+      loadingEl.classList.add('visible');
+      loadingText.textContent = 'Starting camera & loading AR engine…';
+      errorText.style.display = 'none';
+
+      // Reset tracking state
+      trackedTargets.clear();
+      updateWordDisplay();
+
+      // Build tracker status indicators
+      document.getElementById('trackerStatus').innerHTML =
+        selectedPhonemes.map((p, i) =>
+          `<div class="tracker-dot"><span class="dot" id="dot-${i}"></span>${p}</div>`
+        ).join('');
+
+      // Create a blob URL from the compiled .mind ArrayBuffer
+      const blob = new Blob([compiledMindFile]);
+      _arMindUrl = URL.createObjectURL(blob);
+
+      const container = document.getElementById('ar-container');
+      container.innerHTML = ''; // ensure clean slate
+
+      try {
+        // Phase 1: Build scene graph (synchronous)
+        initAR(_arMindUrl, container);
+
+        // Phase 2: Start camera stream (async — may prompt for permission)
+        loadingText.textContent = 'Waiting for camera permission…';
+        await startAR();
+
+        // All good — hide loading overlay
+        loadingEl.classList.remove('visible');
+
+      } catch (err) {
+        // ── Graceful error handling ──────────────────────────────
+        console.error('[AR] Launch failed:', err);
+
+        // Identify common failure modes for user-friendly messaging
+        let msg = 'AR could not start.';
+        if (err.name === 'NotAllowedError' || (err.message && err.message.includes('Permission'))) {
+          msg = '📷 Camera permission denied.\nPlease allow camera access in your browser settings and try again.';
+        } else if (err.name === 'NotFoundError') {
+          msg = '📷 No camera found on this device.';
+        } else if (err.name === 'NotReadableError') {
+          msg = '📷 Camera is in use by another app. Close other apps and try again.';
+        } else if (err.message) {
+          msg = 'AR error: ' + err.message;
+        }
+
+        loadingText.textContent = 'Camera failed to start';
+        errorText.style.display = 'block';
+        errorText.textContent = msg;
+
+        // Offer a way back after a short delay
+        setTimeout(() => {
+          loadingEl.classList.remove('visible');
+          // Clean up any partial init
+          if (mindarThree) {
+            try { mindarThree.stop(); } catch (_) { }
+            mindarThree = null;
+          }
+          container.innerHTML = '';
+        }, 3500);
+      }
+    }
+
+    // ─────────────────────────────────────────────
+    // WORD DISPLAY + TRACKING INDICATORS
+    // ─────────────────────────────────────────────
+    /**
+     * updateWordDisplay — pure DOM update from trackedTargets Map.
+     * Called from onTargetFound / onTargetLost.
+     * Sorted by target index so word order matches phoneme selection order.
+     */
+    function updateWordDisplay() {
+      const wordEl = document.getElementById('builtWord');
+      const speakBtnEl = document.getElementById('speakBtn');
+
+      // Update tracker dots
+      selectedPhonemes.forEach((_, i) => {
+        const dot = document.getElementById('dot-' + i);
+        if (dot) dot.classList.toggle('active', trackedTargets.has(i));
+      });
+
+      if (trackedTargets.size === 0) {
+        wordEl.innerHTML = '<span class="scan-hint">Point camera at your phoneme cards</span>';
+        speakBtnEl.classList.remove('visible');
+        
+        if (currentSequence.length > 0 && !matchWord(currentSequence)) {
+            if (attemptStartTime) {
+                logResult(currentSequence, "incorrect", Date.now() - attemptStartTime);
+            }
+        }
+        currentSequence = [];
+        attemptStartTime = null;
+        return;
+      }
+
+      // Sort by index (= selection order = intended word order)
+      const sorted = Array.from(trackedTargets.entries()).sort((a, b) => a[0] - b[0]);
+      const sequence = sorted.map(([, phoneme]) => phoneme);
+
+      if (JSON.stringify(sequence) !== JSON.stringify(currentSequence)) {
+          if (currentSequence.length > 0 && !matchWord(currentSequence)) {
+              if (attemptStartTime && Date.now() - attemptStartTime > 1000) {
+                  logResult(currentSequence, "incorrect", Date.now() - attemptStartTime);
+              }
+          }
+          currentSequence = sequence;
+          if (!attemptStartTime) attemptStartTime = Date.now();
+      }
+
+      const match = matchWord(sequence);
+
+      if (match) {
+          wordEl.innerHTML = `<span class="phoneme-part found" style="color: var(--accent-cool)">${match.word}</span>`;
+          speakBtnEl.classList.add('visible');
+          
+          if (attemptStartTime) {
+              logResult(sequence, "correct", Date.now() - attemptStartTime);
+              attemptStartTime = null; // stop timer
+          }
+          speakWord(); // auto trigger
+      } else {
+          wordEl.innerHTML = sequence.map(p => `<span class="phoneme-part">${p}</span>`).join('');
+          wordEl.innerHTML += `<div class="display-hint" style="font-size: 0.85rem; color: var(--text-muted); width: 100%; margin-top: 8px;">Hint: Not a valid word yet!</div>`;
+          speakBtnEl.classList.remove('visible');
+
+          clearTimeout(trackingTimeout);
+          trackingTimeout = setTimeout(() => {
+              if (JSON.stringify(sequence) === JSON.stringify(currentSequence) && attemptStartTime) {
+                  logResult(sequence, "incorrect", Date.now() - attemptStartTime);
+                  attemptStartTime = null; 
+              }
+          }, 2000);
+      }
+    }
+
+    // ─────────────────────────────────────────────
+    // TEXT-TO-SPEECH
+    // ─────────────────────────────────────────────
+    function speakWord() {
+      if (trackedTargets.size === 0) return;
+
+      const sorted = Array.from(trackedTargets.entries()).sort((a, b) => a[0] - b[0]);
+      const phonemes = sorted.map(([, p]) => p);
+      const word = phonemes.join('');
+
+      if (!('speechSynthesis' in window)) return;
+
+      window.speechSynthesis.cancel();
+
+      // 1. Speak the whole word first
+      const wholeWord = new SpeechSynthesisUtterance(word);
+      wholeWord.rate = 0.75; wholeWord.pitch = 1.1;
+      window.speechSynthesis.speak(wholeWord);
+
+      // 2. For multi-phoneme words: spell out each phoneme, then re-say
+      if (phonemes.length > 1) {
+        setTimeout(() => {
+          phonemes.forEach((p, i) => {
+            setTimeout(() => {
+              const u = new SpeechSynthesisUtterance(p);
+              u.rate = 0.65; u.pitch = 1.15;
+              window.speechSynthesis.speak(u);
+            }, i * 700);
+          });
+          setTimeout(() => {
+            const combined = new SpeechSynthesisUtterance(word);
+            combined.rate = 0.7; combined.pitch = 1.05;
+            window.speechSynthesis.speak(combined);
+          }, phonemes.length * 700 + 300);
+        }, 1200);
+      }
+    }
+  </script>
+</body>
+
+</html>
