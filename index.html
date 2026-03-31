@@ -1341,6 +1341,12 @@
     let _arMindUrl = null;
     /** Currently visible targets: index → phoneme string */
     const trackedTargets = new Map();
+    /** Animation queue for overlay entrance/exit tweens */
+    const _arAnimations = [];
+    /** Anchor references for arc drawing */
+    const _arAnchors = [];
+    /** Current word-completion arc line */
+    let _wordArc = null;
 
     // ─────────────────────────────────────────────
     // SCREEN NAVIGATION
@@ -1714,6 +1720,51 @@
     //    8. On stop: setAnimationLoop(null) → mindarThree.stop() → dispose
     // ═══════════════════════════════════════════════════════════════
 
+    // ─────────────────────────────────────────────
+    // AR ANIMATION HELPERS
+    // ─────────────────────────────────────────────
+    function _tweenScale(mesh, fromScale, toScale, duration) {
+      _arAnimations.push({ mesh, fromScale, toScale, startTime: performance.now(), duration });
+    }
+
+    function _processAnimations() {
+      const now = performance.now();
+      for (let i = _arAnimations.length - 1; i >= 0; i--) {
+        const a = _arAnimations[i];
+        const t = Math.min((now - a.startTime) / a.duration, 1);
+        const s = a.fromScale + (a.toScale - a.fromScale) * t;
+        a.mesh.scale.set(s, s, s);
+        if (t >= 1) _arAnimations.splice(i, 1);
+      }
+    }
+
+    function updateWordArc(isMatch) {
+      if (_wordArc && mindarThree) {
+        mindarThree.scene.remove(_wordArc);
+        _wordArc.geometry.dispose();
+        _wordArc.material.dispose();
+        _wordArc = null;
+      }
+      if (!isMatch || !mindarThree || trackedTargets.size < 2) return;
+
+      const sorted = Array.from(trackedTargets.keys()).sort((a, b) => a - b);
+      const positions = [];
+      sorted.forEach(idx => {
+        const anchor = _arAnchors[idx];
+        if (!anchor) return;
+        const pos = new THREE.Vector3();
+        anchor.group.getWorldPosition(pos);
+        positions.push(pos.x, pos.y, pos.z);
+      });
+      if (positions.length < 6) return;
+
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const mat = new THREE.LineBasicMaterial({ color: 0x4ECDC4, linewidth: 3 });
+      _wordArc = new THREE.Line(geo, mat);
+      mindarThree.scene.add(_wordArc);
+    }
+
     /**
      * Creates a Three.js mesh showing the phoneme label.
      * Rendered onto a canvas → CanvasTexture → PlaneGeometry.
@@ -1752,7 +1803,7 @@
 
       // Phoneme text — centred
       ctx.fillStyle = col;
-      ctx.font = 'bold ' + (phoneme.length > 2 ? '110px' : '150px') + ' Fredoka, sans-serif';
+      ctx.font = 'bold ' + (phoneme.length > 2 ? '110px' : '150px') + ' Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(phoneme.toUpperCase(), W / 2, H / 2 + 8);
@@ -1764,10 +1815,11 @@
         map: texture,
         transparent: true,
         side: THREE.DoubleSide,
-        depthWrite: false   // prevents z-fighting artifacts on the marker surface
+        depthWrite: false,
+        depthTest: false
       });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(0, 0, 0.01); // tiny z-offset above the marker plane
+      mesh.position.set(0, 0, 0.1); // raised z-offset to prevent z-fighting
 
       return mesh;
     }
@@ -1821,18 +1873,25 @@
       scene.add(hemiLight);
 
       // ── 5. Anchors — one per phoneme target ───────────────────
+      _arAnchors.length = 0;
       selectedPhonemes.forEach((phoneme, idx) => {
         // addAnchor(i) binds to target index i in the .mind file.
         // anchor.group is a THREE.Group that is auto-positioned+oriented
         // by the MindAR tracking system every frame.
         const anchor = mindarThree.addAnchor(idx);
         const mesh = createPhonemeOverlayMesh(phoneme, idx);
+        mesh.scale.set(0, 0, 0); // start invisible; entrance tween shows it
         anchor.group.add(mesh);
+        _arAnchors[idx] = anchor;
 
         // ── Target found: marker became visible ─────────────────
         anchor.onTargetFound = () => {
           console.log('[AR] ✅ Target found — idx:', idx, 'phoneme:', phoneme);
           trackedTargets.set(idx, phoneme);
+          // Bounce in: scale 0→1.15 then settle to 1.0
+          mesh.scale.set(0, 0, 0);
+          _tweenScale(mesh, 0, 1.15, 200);
+          setTimeout(() => _tweenScale(mesh, 1.15, 1.0, 100), 200);
           updateWordDisplay();
         };
 
@@ -1840,6 +1899,7 @@
         anchor.onTargetLost = () => {
           console.log('[AR] ❌ Target lost  — idx:', idx, 'phoneme:', phoneme);
           trackedTargets.delete(idx);
+          _tweenScale(mesh, 1.0, 0, 150);
           updateWordDisplay();
         };
       });
@@ -1880,6 +1940,7 @@
       // compatible render loops. It replaces requestAnimationFrame.
       // MindAR's tracking update runs inside the loop automatically.
       renderer.setAnimationLoop(() => {
+        _processAnimations();
         renderer.render(scene, camera);
       });
 
@@ -1938,6 +1999,9 @@
       // 7. Reset references
       mindarThree = null;
       trackedTargets.clear();
+      _arAnimations.length = 0;
+      _arAnchors.length = 0;
+      updateWordArc(false);
 
       console.log('[AR] Cleanup complete');
       showSummary();
@@ -2044,6 +2108,7 @@
       if (trackedTargets.size === 0) {
         wordEl.innerHTML = '<span class="scan-hint">Point camera at your phoneme cards</span>';
         speakBtnEl.classList.remove('visible');
+        updateWordArc(false);
         
         if (currentSequence.length > 0 && !matchWord(currentSequence)) {
             if (attemptStartTime) {
@@ -2074,6 +2139,7 @@
       if (match) {
           wordEl.innerHTML = `<span class="phoneme-part found" style="color: var(--accent-cool)">${match.word}</span>`;
           speakBtnEl.classList.add('visible');
+          updateWordArc(true);
           
           if (attemptStartTime) {
               logResult(sequence, "correct", Date.now() - attemptStartTime);
@@ -2084,6 +2150,7 @@
           wordEl.innerHTML = sequence.map(p => `<span class="phoneme-part">${p}</span>`).join('');
           wordEl.innerHTML += `<div class="display-hint" style="font-size: 0.85rem; color: var(--text-muted); width: 100%; margin-top: 8px;">Try a different order! 🔍</div>`;
           speakBtnEl.classList.remove('visible');
+          updateWordArc(false);
 
           clearTimeout(trackingTimeout);
           trackingTimeout = setTimeout(() => {
