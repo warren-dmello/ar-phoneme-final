@@ -1118,7 +1118,8 @@
 
     <!-- ══════ DISPLAY MODE OVERLAY ══════ -->
     <div class="display-overlay" id="displayOverlay">
-      <div id="gridDisplayContainer" style="display:none; width: 100%; height: 100%; overflow-y: auto; background: #222; color: #fff;"></div>
+      <div id="gridDisplayContainer"
+        style="display:none; width: 100%; height: 100%; overflow-y: auto; background: #222; color: #fff;"></div>
       <div class="display-overlay-top">
         <button class="display-nav-btn" id="displayPrev" onclick="displayNav(-1)">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
@@ -1651,10 +1652,10 @@
       // Hide single display elements
       document.getElementById('displayCardImg').style.display = 'none';
       document.getElementById('displayPhonemeLabel').style.display = 'none';
-      
+
       // Attempt fullscreen
       if (document.documentElement.requestFullscreen) {
-          document.documentElement.requestFullscreen().catch(err => console.log(err));
+        document.documentElement.requestFullscreen().catch(err => console.log(err));
       }
     }
 
@@ -1670,8 +1671,8 @@
       // Reset grid
       const container = document.getElementById('gridDisplayContainer');
       if (container) {
-          container.style.display = 'none';
-          container.innerHTML = '';
+        container.style.display = 'none';
+        container.innerHTML = '';
       }
 
       // Restore single mode UI
@@ -1679,9 +1680,9 @@
       document.getElementById('displayPhonemeLabel').style.display = '';
 
       displayModeType = "single";
-      
+
       if (document.fullscreenElement) {
-          document.exitFullscreen().catch(err => console.log(err));
+        document.exitFullscreen().catch(err => console.log(err));
       }
     }
 
@@ -2109,11 +2110,11 @@
         wordEl.innerHTML = '<span class="scan-hint">Point camera at your phoneme cards</span>';
         speakBtnEl.classList.remove('visible');
         updateWordArc(false);
-        
+
         if (currentSequence.length > 0 && !matchWord(currentSequence)) {
-            if (attemptStartTime) {
-                logResult(currentSequence, "incorrect", Date.now() - attemptStartTime);
-            }
+          if (attemptStartTime) {
+            logResult(currentSequence, "incorrect", Date.now() - attemptStartTime);
+          }
         }
         currentSequence = [];
         attemptStartTime = null;
@@ -2125,42 +2126,59 @@
       const sequence = sorted.map(([, phoneme]) => phoneme);
 
       if (JSON.stringify(sequence) !== JSON.stringify(currentSequence)) {
-          if (currentSequence.length > 0 && !matchWord(currentSequence)) {
-              if (attemptStartTime && Date.now() - attemptStartTime > 1000) {
-                  logResult(currentSequence, "incorrect", Date.now() - attemptStartTime);
-              }
+        if (currentSequence.length > 0 && !matchWord(currentSequence)) {
+          if (attemptStartTime && Date.now() - attemptStartTime > 1000) {
+            logResult(currentSequence, "incorrect", Date.now() - attemptStartTime);
           }
-          currentSequence = sequence;
-          if (!attemptStartTime) attemptStartTime = Date.now();
+        }
+        currentSequence = sequence;
+        if (!attemptStartTime) attemptStartTime = Date.now();
       }
 
       const match = matchWord(sequence);
 
       if (match) {
-          wordEl.innerHTML = `<span class="phoneme-part found" style="color: var(--accent-cool)">${match.word}</span>`;
-          speakBtnEl.classList.add('visible');
-          updateWordArc(true);
-          
-          if (attemptStartTime) {
-              logResult(sequence, "correct", Date.now() - attemptStartTime);
-              attemptStartTime = null; // stop timer
-          }
-          speakWord(); // auto trigger
-      } else {
-          wordEl.innerHTML = sequence.map(p => `<span class="phoneme-part">${p}</span>`).join('');
-          wordEl.innerHTML += `<div class="display-hint" style="font-size: 0.85rem; color: var(--text-muted); width: 100%; margin-top: 8px;">Try a different order! 🔍</div>`;
-          speakBtnEl.classList.remove('visible');
-          updateWordArc(false);
+        wordEl.innerHTML = `<span class="phoneme-part found" style="color: var(--accent-cool)">${match.word}</span>`;
+        speakBtnEl.classList.add('visible');
+        updateWordArc(true);
 
-          clearTimeout(trackingTimeout);
-          trackingTimeout = setTimeout(() => {
-              if (JSON.stringify(sequence) === JSON.stringify(currentSequence)) {
-                  if (attemptStartTime !== null) {
-                      logResult(sequence, "incorrect", Date.now() - attemptStartTime);
-                      attemptStartTime = null; 
-                  }
+        if (attemptStartTime) {
+          logResult(sequence, "correct", Date.now() - attemptStartTime);
+          attemptStartTime = null; // stop timer
+
+          // Pulse & flash celebration on the AR cards
+          trackedTargets.forEach((phoneme, idx) => {
+            const anchor = _arAnchors[idx];
+            if (anchor && anchor.group && anchor.group.children[0]) {
+              const mesh = anchor.group.children[0];
+              // Pulse
+              _tweenScale(mesh, 1.0, 1.4, 150);
+              setTimeout(() => _tweenScale(mesh, 1.4, 1.0, 250), 150);
+              // Flash
+              if (mesh.material && mesh.material.color) {
+                const origHex = mesh.material.color.getHex();
+                mesh.material.color.setHex(0xb8f2e6); // Mint tint flash
+                setTimeout(() => mesh.material.color.setHex(origHex), 400);
               }
-          }, 2000);
+            }
+          });
+        }
+        speakWord(); // auto trigger
+      } else {
+        wordEl.innerHTML = sequence.map(p => `<span class="phoneme-part">${p}</span>`).join('');
+        wordEl.innerHTML += `<div class="display-hint" style="font-size: 0.85rem; color: var(--text-muted); width: 100%; margin-top: 8px;">Try a different order! 🔍</div>`;
+        speakBtnEl.classList.remove('visible');
+        updateWordArc(false);
+
+        clearTimeout(trackingTimeout);
+        trackingTimeout = setTimeout(() => {
+          if (JSON.stringify(sequence) === JSON.stringify(currentSequence)) {
+            if (attemptStartTime !== null) {
+              logResult(sequence, "incorrect", Date.now() - attemptStartTime);
+              attemptStartTime = null;
+            }
+          }
+        }, 2000);
       }
     }
 
