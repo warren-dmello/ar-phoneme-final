@@ -1009,14 +1009,7 @@
             </svg>
             Scan &amp; Build Words
           </button>
-          <button class="btn btn-primary" onclick="downloadLogs()" id="downloadLogsBtn" style="display:flex;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download Results
-          </button>
+
         </div>
       </div>
     </div>
@@ -1199,6 +1192,24 @@
       </div>
     </div>
 
+    <!-- ══════ SUMMARY SCREEN ══════ -->
+    <div id="summaryScreen" class="screen setup">
+      <div class="setup-header">
+        <h1>Session Summary</h1>
+      </div>
+      <div class="setup-body" style="text-align:center; padding-top: 40px;">
+        <div id="summaryContent"></div>
+        <div style="display:flex; flex-direction:column; gap:16px; margin-top:32px;">
+          <button class="btn btn-primary" onclick="downloadLogs()">
+            Download Results
+          </button>
+          <button class="btn btn-secondary" onclick="showScreen('homeScreen')">
+            Back to Home
+          </button>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /.app -->
 
   <script>
@@ -1218,14 +1229,34 @@
     // PHONEME DATA
     // ─────────────────────────────────────────────
     const PHONEME_SETS = {
-      core: ['k','a','t','m','s','ee']
+      core: ['k', 'a', 't', 'm', 's', 'ee', 'p', 'n', 'i']
     };
 
     const VALID_WORDS = [
-      { phonemes: ["k","a","t"], word: "cat" },
-      { phonemes: ["m","a","t"], word: "mat" },
-      { phonemes: ["s","a","t"], word: "sat" },
-      { phonemes: ["s","ee"], word: "see" }
+      { phonemes: ["k", "a", "t"], word: "cat" },
+      { phonemes: ["m", "a", "t"], word: "mat" },
+      { phonemes: ["s", "a", "t"], word: "sat" },
+      { phonemes: ["s", "ee"], word: "see" },
+      { phonemes: ["m", "ee"], word: "me" },
+      { phonemes: ["t", "ee"], word: "tea" },
+      { phonemes: ["p", "a", "t"], word: "pat" },
+      { phonemes: ["p", "a", "n"], word: "pan" },
+      { phonemes: ["m", "a", "p"], word: "map" },
+      { phonemes: ["t", "a", "p"], word: "tap" },
+      { phonemes: ["n", "a", "p"], word: "nap" },
+      { phonemes: ["t", "a", "n"], word: "tan" },
+      { phonemes: ["m", "a", "n"], word: "man" },
+      { phonemes: ["k", "a", "n"], word: "can" },
+      { phonemes: ["s", "i", "t"], word: "sit" },
+      { phonemes: ["k", "i", "t"], word: "kit" },
+      { phonemes: ["t", "i", "n"], word: "tin" },
+      { phonemes: ["p", "i", "n"], word: "pin" },
+      { phonemes: ["p", "i", "t"], word: "pit" },
+      { phonemes: ["t", "i", "p"], word: "tip" },
+      { phonemes: ["s", "i", "p"], word: "sip" },
+      { phonemes: ["n", "i", "t"], word: "nit" },
+      { phonemes: ["k", "i", "n"], word: "kin" },
+      { phonemes: ["s", "i", "n"], word: "sin" }
     ];
     let researchMode = true;
     let sessionLogs = [];
@@ -1245,6 +1276,34 @@
         timeTaken
       });
       console.log(`[Research Log] ${result}:`, sequence, `${timeTaken}ms`);
+    }
+
+    function showSummary() {
+      if (sessionLogs.length === 0) { showScreen('homeScreen'); return; }
+      const total = sessionLogs.length;
+      const correct = sessionLogs.filter(l => l.result === 'correct').length;
+      const accuracy = Math.round((correct / total) * 100);
+      const avgTime = Math.round(
+        sessionLogs.reduce((sum, l) => sum + l.timeTaken, 0) / total / 1000
+      );
+      document.getElementById('summaryContent').innerHTML = `
+        <div style="font-family:var(--font-display); font-size:1.1rem; color:var(--text-muted); margin-bottom:24px;">Great session! Here's how it went:</div>
+        <div style="display:flex; justify-content:center; gap:24px; flex-wrap:wrap;">
+          <div style="background:var(--bg-card); border-radius:var(--radius); padding:20px 28px; box-shadow:var(--shadow-sm);">
+            <div style="font-family:var(--font-display); font-size:2.4rem; font-weight:700; color:var(--accent-cool)">${correct}</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">Words Built</div>
+          </div>
+          <div style="background:var(--bg-card); border-radius:var(--radius); padding:20px 28px; box-shadow:var(--shadow-sm);">
+            <div style="font-family:var(--font-display); font-size:2.4rem; font-weight:700; color:var(--accent-warm)">${accuracy}%</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">Accuracy</div>
+          </div>
+          <div style="background:var(--bg-card); border-radius:var(--radius); padding:20px 28px; box-shadow:var(--shadow-sm);">
+            <div style="font-family:var(--font-display); font-size:2.4rem; font-weight:700; color:var(--accent-purple)">${avgTime}s</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">Avg. Attempt Time</div>
+          </div>
+        </div>
+      `;
+      showScreen('summaryScreen');
     }
 
     function downloadLogs() {
@@ -1323,7 +1382,7 @@
     function togglePhoneme(p) {
       const idx = selectedPhonemes.indexOf(p);
       if (idx > -1) selectedPhonemes.splice(idx, 1);
-      else if (selectedPhonemes.length < 10) selectedPhonemes.push(p);
+      else if (selectedPhonemes.length < 8) selectedPhonemes.push(p);
       updateSelectedUI();
       const activeTab = document.querySelector('.phoneme-tab.active');
       if (activeTab) renderPhonemeGrid(activeTab.dataset.cat);
@@ -1725,7 +1784,7 @@
     function initAR(mindUrl, container) {
       console.log('[AR] initAR() — constructing MindARThree');
 
-      const maxTrack = Math.min(selectedPhonemes.length, 4);
+      const maxTrack = Math.min(selectedPhonemes.length, 8);
 
       // ── 1. Create MindARThree ──────────────────────────────────
       // MindARThree is the central controller. It:
@@ -1837,7 +1896,7 @@
       if (!mindarThree) {
         // Nothing to clean up; just navigate home
         trackedTargets.clear();
-        showScreen('homeScreen');
+        showSummary();
         return;
       }
 
@@ -1881,7 +1940,7 @@
       trackedTargets.clear();
 
       console.log('[AR] Cleanup complete');
-      showScreen('homeScreen');
+      showSummary();
     }
 
     /**
@@ -2023,14 +2082,16 @@
           speakWord(); // auto trigger
       } else {
           wordEl.innerHTML = sequence.map(p => `<span class="phoneme-part">${p}</span>`).join('');
-          wordEl.innerHTML += `<div class="display-hint" style="font-size: 0.85rem; color: var(--text-muted); width: 100%; margin-top: 8px;">Hint: Not a valid word yet!</div>`;
+          wordEl.innerHTML += `<div class="display-hint" style="font-size: 0.85rem; color: var(--text-muted); width: 100%; margin-top: 8px;">Try a different order! 🔍</div>`;
           speakBtnEl.classList.remove('visible');
 
           clearTimeout(trackingTimeout);
           trackingTimeout = setTimeout(() => {
-              if (JSON.stringify(sequence) === JSON.stringify(currentSequence) && attemptStartTime) {
-                  logResult(sequence, "incorrect", Date.now() - attemptStartTime);
-                  attemptStartTime = null; 
+              if (JSON.stringify(sequence) === JSON.stringify(currentSequence)) {
+                  if (attemptStartTime !== null) {
+                      logResult(sequence, "incorrect", Date.now() - attemptStartTime);
+                      attemptStartTime = null; 
+                  }
               }
           }, 2000);
       }
