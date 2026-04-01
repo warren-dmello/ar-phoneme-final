@@ -1862,11 +1862,11 @@
       const { renderer, scene, camera } = mindarThree;
 
       // ── 3. Renderer configuration ─────────────────────────────
-      // CRITICAL: alpha:true is already set by MindARThree.
-      // We set clearColor with alpha=0 so the video bleeds through.
+      // WebGL renderer must use alpha: true (set by MindAR)
+      // We explicitly set clearColor with 0 alpha so the camera feed bleeds through
       renderer.setClearColor(0x000000, 0);
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // cap at 2× for perf
-      renderer.shadowMap.enabled = false; // shadows off for mobile perf
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = false;
 
       // ── 4. Lighting ────────────────────────────────────────────
       // HemisphereLight gives natural top/bottom fill with no shadows
