@@ -1945,6 +1945,9 @@
       // compatible render loops. It replaces requestAnimationFrame.
       // MindAR's tracking update runs inside the loop automatically.
       renderer.setAnimationLoop(() => {
+        if (mindarThree && mindarThree.update) {
+          mindarThree.update();
+        }
         _processAnimations();
         renderer.render(scene, camera);
       });
