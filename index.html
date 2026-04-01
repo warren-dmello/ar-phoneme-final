@@ -1816,11 +1816,17 @@
         map: texture,
         transparent: true,
         side: THREE.DoubleSide,
-        depthWrite: false,
-        depthTest: false
+        depthWrite: true, // Ensure proper depth handling
+        depthTest: true,
+        visible: true // Explicitly visible
       });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(0, 0, 0.1); // raised z-offset to prevent z-fighting
+      
+      // Ensure mesh position is in front of anchor/camera
+      mesh.position.set(0, 0, 0.1); 
+      
+      // Ensure mesh scale is visible
+      mesh.scale.set(1, 1, 1);
 
       return mesh;
     }
@@ -1892,10 +1898,10 @@
           trackedTargets.set(idx, phoneme);
           mesh.visible = true;
           
-          // Bounce in: scale 0→1.15 then settle to 1.0
-          mesh.scale.set(0, 0, 0);
-          _tweenScale(mesh, 0, 1.15, 200);
-          setTimeout(() => _tweenScale(mesh, 1.15, 1.0, 100), 200);
+          // Ensure scale is visible immediately (bypass failing tween)
+          mesh.scale.set(1, 1, 1);
+          // _tweenScale(mesh, 0, 1.15, 200);
+          // setTimeout(() => _tweenScale(mesh, 1.15, 1.0, 100), 200);
           updateWordDisplay();
         };
 
