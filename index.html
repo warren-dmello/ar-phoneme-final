@@ -1881,7 +1881,8 @@
         // by the MindAR tracking system every frame.
         const anchor = mindarThree.addAnchor(idx);
         const mesh = createPhonemeOverlayMesh(phoneme, idx);
-        mesh.scale.set(0, 0, 0); // start invisible; entrance tween shows it
+        
+        mesh.visible = false; // Start hidden until target is found
         anchor.group.add(mesh);
         _arAnchors[idx] = anchor;
 
@@ -1889,6 +1890,8 @@
         anchor.onTargetFound = () => {
           console.log('[AR] ✅ Target found — idx:', idx, 'phoneme:', phoneme);
           trackedTargets.set(idx, phoneme);
+          mesh.visible = true;
+          
           // Bounce in: scale 0→1.15 then settle to 1.0
           mesh.scale.set(0, 0, 0);
           _tweenScale(mesh, 0, 1.15, 200);
@@ -1900,7 +1903,8 @@
         anchor.onTargetLost = () => {
           console.log('[AR] ❌ Target lost  — idx:', idx, 'phoneme:', phoneme);
           trackedTargets.delete(idx);
-          _tweenScale(mesh, 1.0, 0, 150);
+          mesh.visible = false; // Hide mesh immediately
+          
           updateWordDisplay();
         };
       });
