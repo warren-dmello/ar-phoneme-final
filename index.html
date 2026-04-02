@@ -9,12 +9,12 @@
   <!--
     ╔══════════════════════════════════════════════════════════════╗
     ║  DEPENDENCY STRATEGY                                         ║
-    ║  • mindar-image-three.prod.js  → bundles Three.js + MindAR  ║
-    ║    Exposes globals: window.MINDAR, window.THREE              ║
+    ║  • Three.js r153 loaded first (MindAR 1.1.4 needs ^0.153)  ║
+    ║  • mindar-image-three.prod.js uses window.THREE             ║
     ║  • No A-Frame. No aframe.min.js. Ever.                       ║
     ╚══════════════════════════════════════════════════════════════╝
   -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r126/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image.prod.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.1.4/dist/mindar-image-three.prod.js"></script>
 
@@ -738,6 +738,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
+      z-index: 1;
     }
 
     /* Ensure MindAR's injected canvas sits on top of the video */
@@ -747,6 +748,7 @@
       left: 0;
       width: 100% !important;
       height: 100% !important;
+      z-index: 2;
     }
 
     /* AR overlay sits above both video and canvas */
@@ -935,6 +937,107 @@
     @keyframes spin {
       to {
         transform: rotate(360deg);
+      }
+    }
+
+    /* ── CELEBRATION OVERLAY ── */
+    .celebration-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 45;
+      overflow: hidden;
+    }
+
+    .celebration-overlay .confetti {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      opacity: 0;
+      animation: confettiFall 1.5s ease-out forwards;
+    }
+
+    @keyframes confettiFall {
+      0% {
+        opacity: 1;
+        transform: translateY(0) rotate(0deg) scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: translateY(120px) rotate(720deg) scale(0.3);
+      }
+    }
+
+    .celebration-overlay .word-flash {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      font-family: var(--font-display);
+      font-size: 4rem;
+      font-weight: 800;
+      color: var(--accent-cool);
+      text-shadow: 0 0 30px rgba(78, 205, 196, 0.6), 0 4px 12px rgba(0,0,0,0.3);
+      animation: wordFlashIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+      pointer-events: none;
+      z-index: 46;
+    }
+
+    @keyframes wordFlashIn {
+      0% {
+        transform: translate(-50%, -50%) scale(0) rotate(-10deg);
+        opacity: 0;
+      }
+      50% {
+        transform: translate(-50%, -50%) scale(1.3) rotate(3deg);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(0) rotate(0deg);
+        opacity: 0;
+      }
+    }
+
+    .celebration-overlay .connector-line {
+      position: absolute;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent-cool), var(--accent-purple), var(--accent-cool));
+      border-radius: 4px;
+      box-shadow: 0 0 12px rgba(78, 205, 196, 0.5);
+      transform-origin: left center;
+      animation: connectorPulse 1.5s ease-in-out infinite;
+      z-index: 44;
+    }
+
+    @keyframes connectorPulse {
+      0%, 100% {
+        box-shadow: 0 0 8px rgba(78, 205, 196, 0.4);
+        opacity: 0.85;
+      }
+      50% {
+        box-shadow: 0 0 20px rgba(78, 205, 196, 0.8);
+        opacity: 1;
+      }
+    }
+
+    .celebration-overlay .glow-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 3px solid var(--accent-cool);
+      box-shadow: 0 0 15px rgba(78, 205, 196, 0.6), inset 0 0 15px rgba(78, 205, 196, 0.2);
+      animation: glowExpand 0.6s ease-out forwards;
+      pointer-events: none;
+    }
+
+    @keyframes glowExpand {
+      0% {
+        transform: translate(-50%, -50%) scale(0.3);
+        opacity: 1;
+      }
+      100% {
+        transform: translate(-50%, -50%) scale(1.5);
+        opacity: 0;
       }
     }
 
@@ -1154,6 +1257,9 @@
         Do NOT put children here; they will be wiped on launchAR().
       -->
       <div id="ar-container"></div>
+
+      <!-- DOM-based celebration overlay for word matches -->
+      <div class="celebration-overlay" id="celebrationOverlay"></div>
 
       <!-- DOM overlay: pointer-events: none so it doesn't block Three.js canvas -->
       <div class="ar-overlay">
@@ -1739,16 +1845,51 @@
       }
     }
 
+    /** Whether the word arc should be shown */
+    let _wordArcActive = false;
+
     function updateWordArc(isMatch) {
-      if (_wordArc && mindarThree) {
-        mindarThree.scene.remove(_wordArc);
-        _wordArc.geometry.dispose();
-        _wordArc.material.dispose();
-        _wordArc = null;
+      _wordArcActive = isMatch && !!mindarThree && trackedTargets.size >= 2;
+
+      if (!_wordArcActive) {
+        if (_wordArc && mindarThree) {
+          mindarThree.scene.remove(_wordArc);
+          _wordArc.geometry.dispose();
+          _wordArc.material.dispose();
+          _wordArc = null;
+        }
+        return;
       }
-      if (!isMatch || !mindarThree || trackedTargets.size < 2) return;
+
+      // Create the arc line if it doesn't exist yet
+      if (!_wordArc) {
+        const sorted = Array.from(trackedTargets.keys()).sort((a, b) => a - b);
+        const pointCount = sorted.length;
+        const positions = new Float32Array(pointCount * 3);
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        const mat = new THREE.LineBasicMaterial({
+          color: 0x4ECDC4,
+          linewidth: 3,
+          transparent: true,
+          opacity: 0.9,
+          depthTest: false
+        });
+        _wordArc = new THREE.Line(geo, mat);
+        _wordArc.renderOrder = 999;
+        _wordArc.frustumCulled = false;
+        mindarThree.scene.add(_wordArc);
+      }
+    }
+
+    /** Called every frame to update arc positions as cards move */
+    function _updateWordArcPositions() {
+      if (!_wordArc || !_wordArcActive || !mindarThree) return;
 
       const sorted = Array.from(trackedTargets.keys()).sort((a, b) => a - b);
+      if (sorted.length < 2) return;
+
+      // Rebuild geometry with current world positions
       const positions = [];
       sorted.forEach(idx => {
         const anchor = _arAnchors[idx];
@@ -1757,13 +1898,22 @@
         anchor.group.getWorldPosition(pos);
         positions.push(pos.x, pos.y, pos.z);
       });
+
       if (positions.length < 6) return;
 
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const mat = new THREE.LineBasicMaterial({ color: 0x4ECDC4, linewidth: 3 });
-      _wordArc = new THREE.Line(geo, mat);
-      mindarThree.scene.add(_wordArc);
+      const posArr = _wordArc.geometry.getAttribute('position');
+      if (posArr && posArr.count === sorted.length) {
+        for (let i = 0; i < sorted.length; i++) {
+          posArr.setXYZ(i, positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+        }
+        posArr.needsUpdate = true;
+      } else {
+        // Point count changed — rebuild
+        _wordArc.geometry.dispose();
+        const newGeo = new THREE.BufferGeometry();
+        newGeo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+        _wordArc.geometry = newGeo;
+      }
     }
 
     /**
@@ -1811,22 +1961,23 @@
 
       // Three.js texture + geometry
       const texture = new THREE.CanvasTexture(c);
+      texture.needsUpdate = true;
       const geo = new THREE.PlaneGeometry(1, 0.5);
       const mat = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
         side: THREE.DoubleSide,
-        depthWrite: true, // Ensure proper depth handling
-        depthTest: true,
-        visible: true // Explicitly visible
+        depthWrite: false,   // Don't write to depth buffer (overlay always on top)
+        depthTest: false     // Don't test depth (always visible)
       });
       const mesh = new THREE.Mesh(geo, mat);
-      
-      // Ensure mesh position is in front of anchor/camera
-      mesh.position.set(0, 0, 0.1); 
-      
-      // Ensure mesh scale is visible
-      mesh.scale.set(1, 1, 1);
+
+      // Ensure overlay renders above everything else
+      mesh.renderOrder = 100;
+      mesh.frustumCulled = false;
+
+      // Position slightly in front of the anchor plane
+      mesh.position.set(0, 0, 0.1);
 
       return mesh;
     }
@@ -1875,9 +2026,7 @@
       renderer.shadowMap.enabled = false;
 
       // ── 4. Lighting ────────────────────────────────────────────
-      // HemisphereLight gives natural top/bottom fill with no shadows
-      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-      scene.add(hemiLight);
+      // Not needed — we use MeshBasicMaterial which is unlit
 
       // ── 5. Anchors — one per phoneme target ───────────────────
       _arAnchors.length = 0;
@@ -1887,7 +2036,7 @@
         // by the MindAR tracking system every frame.
         const anchor = mindarThree.addAnchor(idx);
         const mesh = createPhonemeOverlayMesh(phoneme, idx);
-        
+
         mesh.visible = false; // Start hidden until target is found
         anchor.group.add(mesh);
         _arAnchors[idx] = anchor;
@@ -1897,11 +2046,11 @@
           console.log('[AR] ✅ Target found — idx:', idx, 'phoneme:', phoneme);
           trackedTargets.set(idx, phoneme);
           mesh.visible = true;
-          
-          // Ensure scale is visible immediately (bypass failing tween)
-          mesh.scale.set(1, 1, 1);
-          // _tweenScale(mesh, 0, 1.15, 200);
-          // setTimeout(() => _tweenScale(mesh, 1.15, 1.0, 100), 200);
+
+          // Pop-in animation: scale from 0 → 1.15 → 1.0
+          mesh.scale.set(0.01, 0.01, 0.01);
+          _tweenScale(mesh, 0.01, 1.15, 200);
+          setTimeout(() => _tweenScale(mesh, 1.15, 1.0, 150), 200);
           updateWordDisplay();
         };
 
@@ -1910,19 +2059,17 @@
           console.log('[AR] ❌ Target lost  — idx:', idx, 'phoneme:', phoneme);
           trackedTargets.delete(idx);
           mesh.visible = false; // Hide mesh immediately
-          
+
           updateWordDisplay();
         };
       });
 
       // ── 6. Resize handler ─────────────────────────────────────
-      // MindARThree adjusts its internal camera + video scale on resize,
-      // but we also need to update renderer pixel size.
+      // MindARThree manages renderer + video sizing internally.
+      // We only update pixel ratio on resize to keep rendering sharp.
       _arResizeHandler = () => {
-        const w = container.clientWidth;
-        const h = container.clientHeight;
-        renderer.setSize(w, h);
-        console.log('[AR] Resize →', w, 'x', h);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        console.log('[AR] Resize event');
       };
       window.addEventListener('resize', _arResizeHandler);
 
@@ -1951,10 +2098,9 @@
       // compatible render loops. It replaces requestAnimationFrame.
       // MindAR's tracking update runs inside the loop automatically.
       renderer.setAnimationLoop(() => {
-        if (mindarThree && mindarThree.update) {
-          mindarThree.update();
-        }
         _processAnimations();
+        // Update word arc connector position every frame (cards move)
+        _updateWordArcPositions();
         renderer.render(scene, camera);
       });
 
@@ -2011,11 +2157,19 @@
       container.innerHTML = '';
 
       // 7. Reset references
-      mindarThree = null;
       trackedTargets.clear();
       _arAnimations.length = 0;
       _arAnchors.length = 0;
-      updateWordArc(false);
+      _wordArcActive = false;
+      if (_wordArc) {
+        _wordArc.geometry.dispose();
+        _wordArc.material.dispose();
+        _wordArc = null;
+      }
+      mindarThree = null;
+
+      // 8. Clear DOM celebration overlay
+      clearCelebration();
 
       console.log('[AR] Cleanup complete');
       showSummary();
@@ -2042,6 +2196,8 @@
 
       // Reset tracking state
       trackedTargets.clear();
+      clearCelebration();
+      sessionLogs = [];
       updateWordDisplay();
 
       // Build tracker status indicators
@@ -2164,17 +2320,14 @@
             const anchor = _arAnchors[idx];
             if (anchor && anchor.group && anchor.group.children[0]) {
               const mesh = anchor.group.children[0];
-              // Pulse
+              // Pulse scale animation
               _tweenScale(mesh, 1.0, 1.4, 150);
               setTimeout(() => _tweenScale(mesh, 1.4, 1.0, 250), 150);
-              // Flash
-              if (mesh.material && mesh.material.color) {
-                const origHex = mesh.material.color.getHex();
-                mesh.material.color.setHex(0xb8f2e6); // Mint tint flash
-                setTimeout(() => mesh.material.color.setHex(origHex), 400);
-              }
             }
           });
+
+          // DOM-based celebration overlay (confetti + word flash + connector)
+          triggerCelebration(match.word);
         }
         speakWord(); // auto trigger
       } else {
@@ -2193,6 +2346,80 @@
           }
         }, 2000);
       }
+    }
+
+    // ─────────────────────────────────────────────
+    // DOM CELEBRATION OVERLAY
+    // ─────────────────────────────────────────────
+    let _celebrationTimer = null;
+
+    function triggerCelebration(word) {
+      const overlay = document.getElementById('celebrationOverlay');
+      if (!overlay) return;
+
+      // Clear any previous celebration
+      clearCelebration();
+
+      // 1. Confetti burst — spawn particles from the center
+      const confettiColors = ['#4ECDC4', '#FF6B35', '#FFE66D', '#A78BFA', '#FF8AAE', '#34D399'];
+      for (let i = 0; i < 30; i++) {
+        const confetti = document.createElement('div');
+        confetti.className = 'confetti';
+        const color = confettiColors[i % confettiColors.length];
+        const left = 30 + Math.random() * 40;  // cluster around center
+        const top = 25 + Math.random() * 30;
+        const size = 6 + Math.random() * 10;
+        const delay = Math.random() * 0.3;
+        const xDrift = (Math.random() - 0.5) * 200;
+
+        confetti.style.cssText = `
+          left: ${left}%;
+          top: ${top}%;
+          width: ${size}px;
+          height: ${size}px;
+          background: ${color};
+          border-radius: ${Math.random() > 0.5 ? '50%' : '2px'};
+          animation-delay: ${delay}s;
+          animation-duration: ${1.2 + Math.random() * 0.6}s;
+          --x-drift: ${xDrift}px;
+        `;
+        // Override the animation to include horizontal drift
+        confetti.style.animation = `confettiFall ${1.2 + Math.random() * 0.6}s ease-out ${delay}s forwards`;
+        overlay.appendChild(confetti);
+      }
+
+      // 2. Word flash — big text in center
+      const wordFlash = document.createElement('div');
+      wordFlash.className = 'word-flash';
+      wordFlash.textContent = word.toUpperCase();
+      overlay.appendChild(wordFlash);
+
+      // 3. Glow rings around center
+      for (let i = 0; i < 3; i++) {
+        const ring = document.createElement('div');
+        ring.className = 'glow-ring';
+        const size = 60 + i * 40;
+        ring.style.cssText = `
+          left: 50%;
+          top: 45%;
+          width: ${size}px;
+          height: ${size}px;
+          animation-delay: ${i * 0.15}s;
+        `;
+        overlay.appendChild(ring);
+      }
+
+      // Auto-clear after animation finishes
+      _celebrationTimer = setTimeout(() => clearCelebration(), 2000);
+    }
+
+    function clearCelebration() {
+      if (_celebrationTimer) {
+        clearTimeout(_celebrationTimer);
+        _celebrationTimer = null;
+      }
+      const overlay = document.getElementById('celebrationOverlay');
+      if (overlay) overlay.innerHTML = '';
     }
 
     // ─────────────────────────────────────────────
